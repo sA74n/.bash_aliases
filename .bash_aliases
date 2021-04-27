@@ -1,7 +1,6 @@
-
 # Print my public IP
 alias myip='curl ipinfo.io/ip';
-alias dnsvalidator_alias='dnsvalidator -tL https://public-dns.info/nameservers.txt -threads 200 -o $tom/../my-resolvers.txt';
+alias dnsvalidator_alias='dnsvalidator -tL https://public-dns.info/nameservers.txt -threads 200 -o $tom/../my-resolvers.txt > /dev/null';
 smule="/home/satan/Desktop/company/Smule";
 indeed="/home/satan/Desktop/company/indeed";
 cybrary="/home/satan/Desktop/company/cybrary";
@@ -40,15 +39,14 @@ content-discovery(){
 	wafw00f $domain_name > waf;
 	whois $domain_name | grep -E "Registrant Organization|Registrant Email" > whois.tmp ;telegram-msg "whois result is "$(cat whois.tmp);
 	rustscan $domain_name -b 1000 -- -Pn -sT -sV -sC > rustscan;
-	whatweb -a 3 --log-verbose=whatweb.txt "htpps://"$domain_name;
+	whatweb -a 3 --log-verbose=whatweb.txt "https://"$domain_name;
 	python3 /home/satan/Desktop/tools/dnsrecon/dnsrecon.py -f -a -s -b -y -k -w -z -v -w -d $domain_name --threads 100 -j json.txt;
 
 #open source information gathering
 	telegram-msg "open source information gathering started";
 	curl "http://index.commoncrawl.org/CC-MAIN-2020-45-index?url=$domain_name*&output=json&fl=url" -o "common-crawl.txt"; cat common-crawl.txt | jq . | awk '{print $2}' | sed 's/.//;s/.$//' > urls.txt; rm common-crawl.txt;
 	gau -retries 7 $domain_name|tee -a urls.txt;
-	curl "http://web.archive.org/cdx/search/cdx?url=$domain_name/*&fl=original&collapse=urlkey" | tee -a urls.txt;
-	
+	curl "http://web.archive.org/cdx/search/cdx?url=$domain_name/*&fl=original&collapse=urlkey&output=text" | tee -a urls.txt;
 
 #sorting and sending them to httpx
 	telegram-msg "sorting and sending them to httpx";
@@ -88,47 +86,113 @@ sd(){
 	echo "sandcastle"; read name;
 	echo "cidr: "; read cidr;
 	echo "asn: "; read asn;
-	echo "wordlist_path1: "; read wordlist_path1;
-	echo "wordlist_path2: "; read wordlist_path2;
+	echo "does the folder already exists?: "; read folder_exists;
+	#echo "wordlist_path1: "; read wordlist_path1;
+	#echo "wordlist_path2: "; read wordlist_path2;
 
-	mkdir $company/$domain_name;
-	cd $company/$domain_name;
-	company_path=$company/$domain_name;
-
+	if [[ $folder_exists -eq "n" ]]
+	then
+		mkdir $company/$domain_name;
+		cd $company/$domain_name;
+		company_path=$company/$domain_name;
+	elif [[ $folder_exists -eq "y" ]]
+	then
+		echo "folder_name: "; read folder_name;
+		company_path="/home/satan/Desktop/company/$folder_name";
+	else
+		echo "please specify"
+	fi
 	cd $company_path;
 
-	certspotter $domain_name | tee -a sd.txt; telegram-msg certspotter;
-	crtsh $domain_name | tee -a sd.txt; telegram-msg crtsh;
-	python3 /home/satan/Desktop/tools/csp-host-checker.py -d "https://"$domain_name -s $name | tee -a urls.txt;
-	printf $domain_name | waybackurls | tee -a urls.txt;
-	python /home/satan/Desktop/tools/sandcastle/sandcastle.py -t $name | tee -a sd.txt;
-	python3 /home/satan/Desktop/tools/csp-host-checker.py -d "https://"$domain_name -s $name | tee -a sd.txt;
-	gsan scan $domain_name;
-	subfinder -d $domain_name -all -nW -rL $tom/../my-resolvers.txt -silent -t 200 | tee -a sd.txt; telegram-msg subfinder;
-	subscraper -e 3 -t 200 --censys-api 6cad07de-31c2-43fe-aacd-eef006813779  --censys-secret 6DZjNDUfAAwzP8CrJtWxaAF6jeaRtkST -o subscraper.txt $domain_name;
-	bufferover $domain_name | tee -a sd.txt; telegram-msg bufferover;
-	python3 /home/satan/Desktop/tools/Sublist3r/sublist3r.py -d $domain_name -o sublister.txt; telegram-msg sublister
+	echo "******certspotter started******"; certspotter $domain_name >> sd.txt;
+	echo "******crt.sh started******"; crtsh $domain_name >> sd.txt;
+	echo "******csp-host-checker******"; python3 /home/satan/Desktop/tools/csp-host-checker.py -d "https://"$domain_name -s $name | tee -a urls.txt;
+	echo "******wayback searching started******"; curl "http://web.archive.org/cdx/search/cdx?url=*.$domain_name&fl=original&collapse=urlkey&output=text" | awk -F '/' '{print $3}' | sort -u >> sd.txt
+	#python /home/satan/Desktop/tools/sandcastle/sandcastle.py -t $name | tee -a sd.txt;
+	echo "******gsan started******"; gsan scan streamlabs.com | sed -n '/company-name/,$p' | sed '/company-name/d' | cut -d " " -f 2 >> sd.txt
+	echo "******subfinder started******";subfinder -d $domain_name -all -nW -rL path/to/my-resolvers.txt -silent -t 200 >> sd.txt;
+	echo "******subscraper started******";subscraper -e 3 -t 200 --censys-api CENSYS_API_ID  --censys-secret CENSYS_SECRET_CODE $domain_name ;cat subscraper_report.txt >> sd.txt; rm subscraper_report.txt;
+	echo "******bufferover started******";bufferover $domain_name >> sd.txt;
+	echo "******sublister started******";python3 /home/satan/Desktop/tools/Sublist3r/sublist3r.py -d $domain_name -o sublister.txt;cat sublister.txt >> sd.txt; rm sublister.txt
 	if [ $cidr ] && [ $asn ]; 
 	then 
-	amass enum -d $domain_name -active -cidr $cidr -asn $asn -o amass-enum.txt; telegram-msg amass-enum;
- 	amass intel -asn $asn -whois -rf $tom/../my-resolvers.txt -d $domain_name -o amass-intel.txt; telegram-msg amass-intel;
+		amass enum -d $domain_name -passive -o amass_passive;
+	#amass enum -d $domain_name -active -brute -cidr $cidr -asn $asn -o amass-enum.txt; telegram-msg amass-enum;
+ 		amass intel -asn $asn -whois -rf $tom/../my-resolvers.txt -d $domain_name -o amass-intel.txt; telegram-msg amass-intel;
  	else
- 	amass enum -d $domain_name -active -o amass-enum.txt; telegram-msg amass-enum.txt;
- 	amass intel -whois -rf $tom/../my-resolvers.txt -d $domain_name -o amass-intel.txt; telegram-msg amass-intel;
+ 	#amass enum -d $domain_name -active -brute -o amass-enum.txt; telegram-msg amass-enum.txt;
+ 		amass enum -d $domain_name -passive -o amass_passive;
+ 		amass intel -whois -rf $tom/../my-resolvers.txt -d $domain_name -o amass-intel.txt; telegram-msg amass-intel;
  	fi
 
+ 	cat sd.txt amass-enum.txt amass_passive amass-intel.txt subscraper_report.txt| tr “[:lower:]” “[:upper:]” | sort -u | httpx -title -threads 200 -status-code -retries 5 -o httpx-subscraper-passive.txt -cdn -follow-redirects ;
+ 	rm sd.txt amass-enum.txt amass-intel.txt subscraper_report.txt;
+
+ 	mkdir screenshot
+ 	webscreenshot -i httpx-subscraper-passive.txt -o screenshot -w 10 -v -r phantomjs --no-xserver
+ 	
  	dnsvalidator_alias;
 
- 	aiodnsbrute_alias $domain_name $wordlist_path1 $company_path; telegram-msg aiodnsbrute;
-	shuffledns_alias $domain_name $wordlist_path2 $company_path; telegram-msg shuffledns;
+ 	aiodnsbrute $domain_name -f - -t 1000 -r path/to/my-resolvers.txt -w /home/satan/Desktop/wordlist/sd/httparchive_subdomains_2020_11_18.txt > aiodnsbrute.txt; cat aiodnsbrute.txt | awk '{print $2}' > aiodnsbrute;rm aiodnsbrute.txts
+ 	#aiodnsbrute_alias $domain_name /home/satan/Desktop/wordlist/sd/httparchive_subdomains_2020_11_18.txt $company_path; telegram-msg aiodnsbrute;
+	shuffledns_alias $domain_name /home/satan/Desktop/wordlist/sd/all.txt $company_path; telegram-msg shuffledns;
 	telegram-msg sd-brute;
 
-	cat sd.txt aiodns.txt shuffledns.txt sublister.txt amass-enum.txt amass-intel.txt subscraper.txt| tr “[:lower:]” “[:upper:]” | sort -u | httpx -title -threads 200 -status-code -retries 5 -o httpx-subscraper.txt -cdn -follow-redirects ;
-	rm sd.txt sublister.txt aiodns.txt shuffledns.txt amass-enum.txt amass-intel.txt subscraper.txt ; telegram-msg sd;
+	cat aiodnsbrute shuffledns.txt| tr “[:lower:]” “[:upper:]” | sort -u | httpx -title -threads 200 -status-code -fc 404 -retries 5 -o httpx-subscraper-brute.txt -cdn -follow-redirects ;
+	#cat sd.txt aiodns.txt shuffledns.txt sublister.txt amass-enum.txt amass-intel.txt subscraper.txt| tr “[:lower:]” “[:upper:]” | sort -u |massdns -s 15000 -t A -o J -r $tom/../my-resolvers.txt --flush
+	rm aiodnsbrute shuffledns.txt ; 
 
 	for i in httpx-subscraper.txt; do wpscan --url $i -e vp --plugins-detection mixed --api-token t6FHlZkNOLa9qoRgm6lpEe9ICr7ETo4Y8fVD1xt1k54s > wpscan.txt; done
 }
 
+webscreenshot_alias(){
+
+	echo "url_list: "; read urls_list;
+	echo "output-path: "; read output-path;
+
+	webscreenshot -i $urls_list -o $output-path -r phantomjs --no-xserver -w 2 --ajax-max-timeouts 3000,5000
+}
+
+progress(){ # a progress bar which tells us the percentage of completion of bruteforcing, when u provide output file and wordlist file
+
+	# echo "src";read src;
+	# echo "result"; read result;
+	# echo "pattern"; read pattern;
+
+	src="url-for-linkfinder";
+	result="linkfinder";
+	pattern="\[URL\]:"
+
+	cat $result | tail -1000 | grep "$pattern" > 1.tmp
+	got=$(cat 1.tmp | cut -d " " -f 2 | tail -1 | xargs -n1 -I@ grep -n "@" $src | cut -d ":" -f 1 | cut -d " " -f 1 );rm 1.tmp;
+	
+	total=$(count $src); 
+	echo $(( $got*100/$total ))"%";
+	
+}
+
+js-recon(){
+	echo "urls list path: ";read urls_list;
+
+	cat $urls_list | grep -iE '\.js' | grep -ivE '\.json' | sort -u >> JSfiles.txt;
+	cat JSfiles.txt | httpx -title -threads 200 -status-code -retries 5 -location -follow-redirects -cdn -o liveJSfiles.txt
+	cat liveJSfiles.txt | cut -d " " -f 1 | xargs -n2 -I@ bash -c "echo -e '\n[URL]: @\n'; python3 ~/Desktop/tools/LinkFinder/linkfinder.py -i @ -o cli" >> JSPathsWithURLErrors.txt;
+	
+
+	for i in {1..5}
+	do
+		cat JSPathsWithURLErrors.txt | grep -B2 -hr "Usage:" | grep "\[URL\]" | cut -d " " -f 2 > error-urls.txt
+		cat error-urls.txt | sort -u | xargs -n2 -I@ bash -c "echo -e '\n[URL]: @\n'; python3 ~/Desktop/tools/LinkFinder/linkfinder.py -i @ -o cli" >> JSPathsWithURLErrors.txt;
+	done
+	cat JSPathsWithURLErrors.txt | grep -B2 -A2 -hvr "Usage:" > JSPathsWithURL.txt;
+	cat JSPathsWithURL.txt | grep -iv '[URL]:' | sort -u > JSPathsWithNoURL.txt;
+	cat JSPathsWithNoURL.txt | python3 ~/Desktop/tools/Bug-Bounty-Toolz/collector.py output; #to segregate folder containing urls,files,paths,params
+
+	cat $urls_list | xargs -n2 -I@ bash -c "echo -e '\n[URL]: @\n'; python3 ~/Desktop/tools/Bug-Bounty-Toolz/getsrc.py @ " >> scriptLinks.txt;
+
+	
+
+}
 
 search-results(){
 
@@ -153,13 +217,9 @@ search-results(){
 
 #--------------------------------------------------TOOLS-------------------------------------------------------------
 
-# dirsearch(){ #runs dirsearch and takes host and extension as arguments
-#python3 ~/Desktop/tools/dirsearch/dirsearch.py -u www.glassdoor.com -F -r -w ~/Desktop/wordlist/content-discovery/all-combined.txt --debug --json-report=all.txt --matches-proxy=http://127.0.0.1
-# 	python3 ~/tools/dirsearch/dirsearch.py -u $1 -E -t 50 -b 
-# }
 aiodnsbrute_alias(){
 
-	aiodnsbrute $1 -f - -o json -t 1000 -r $tom/../my-resolvers.txt -w $2 > $3/aiodns.txt;	
+	aiodnsbrute $1 -f - -o json -t 1000 -r path/to/my-resolvers.txt -w $2 > $3/aiodns.txt;	
 	cat $3/aiodns.txt | jq '.[].domain' | sed 's/\"//g' | sed 's/\*\.//g' | tee -a $3/aiodnsbrute.txt; telegram-msg aiodnsbrute_alias;
 }
 
@@ -168,11 +228,11 @@ bufferover(){
 }
 
 shuffledns_alias(){
-	shuffledns -d $1 -r $tom/../my-resolvers.txt -w $2 -t 500 -v -o $3/shuffledns.txt;
+	shuffledns -d $1 -r path/to/my-resolvers.txt -w $2 -t 500 -v -o $3/shuffledns.txt;
 }
 
 
-telegram-msg(){
+telegram-msg(){ # alias for sending a message to telegram
 	python3 ~/Desktop/tools/telegram-bot-cli/telegram-bot-cli.py --job "$1";
 }
 
@@ -196,7 +256,7 @@ sqlmap(){
 
 burp(){
 cd ~/Desktop/tools/burp
-java -noverify -javaagent:burploader.jar -jar burpsuite_pro_v2020.9.2.jar
+java -noverify -javaagent:burploader.jar -jar -Xmx3G burpsuite_pro_v2020.9.2.jar
 }
 
 mscan(){ #runs masscan
@@ -204,7 +264,7 @@ sudo masscan -p 4443,2075,2076,6443,3868,3366,8443,8080,9443,9091,3000,8000,5900
 }
 
 certspotter(){ 
-curl -s https://certspotter.com/api/v0/certs\?domain\=$1 | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $1
+curl "https://api.certspotter.com/v1/issuances?domain=$1&expand=dns_names" | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $1
 } #h/t Michiel Prins
 
 crtsh(){
@@ -212,13 +272,12 @@ curl -s https://crt.sh/?Identity=%.$1 | grep ">*.$1" | sed 's/<[/]*[TB][DR]>/\n/
 }
 
 open-url(){
-	filename="/home/satan/Desktop/Notes/test.txt";
 
 	while read line; 
 	do
-	    firefox -new-tab "$line";
+	    firefox -new-tab -headless "$line";
 	    sleep 2s;
-	done < $filename
+	done < $1
 }
 
 certnmap(){
@@ -248,7 +307,3 @@ cat $1 | wc -l
 crtshdirsearch(){ #gets all domains from crtsh, runs httprobe and then dir bruteforcers
 curl -s https://crt.sh/?q\=%.$1\&output\=json | jq -r '.[].name_value' | sed 's/\*\.//g' | sort -u | httprobe -c 50 | grep https | xargs -n1 -I{} python3 ~/tools/dirsearch/dirsearch.py -u {} -e $2 -t 50 -b 
 }
-
-
-
-
